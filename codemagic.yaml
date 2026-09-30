@@ -1,0 +1,71 @@
+# Jellyfall – builds the iOS app and sends it to TestFlight.
+# The only line you may need to change is the bundle ID below.
+
+workflows:
+  jellyfall-ios:
+    name: Jellyfall iOS
+    instance_type: mac_mini_m2
+    max_build_duration: 45
+    integrations:
+      app_store_connect: Jellyfall
+    environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: &bundle com.mkgames.jellyfall
+      vars:
+        BUNDLE_ID: *bundle
+        APP_NAME: Jellyfall
+      node: 22
+      xcode: latest
+    scripts:
+      - name: Assemble the project
+        script: |
+          mkdir -p www assets
+          cp index.html www/index.html
+          cp icon.png assets/icon-only.png
+          printf '{"appId":"%s","appName":"%s","webDir":"www"}\n' "$BUNDLE_ID" "$APP_NAME" > capacitor.config.json
+          npm install
+
+      - name: Create the iOS app
+        script: |
+          npx cap add ios
+          npx capacitor-assets generate --ios
+          npx cap sync ios
+
+      - name: Configure the Xcode project
+        script: |
+          PLIST=ios/App/App/Info.plist
+          PB=/usr/libexec/PlistBuddy
+          PBX=ios/App/App.xcodeproj/project.pbxproj
+          # Portrait only, full screen, no export-compliance question
+          $PB -c "Delete :UISupportedInterfaceOrientations" "$PLIST" || true
+          $PB -c "Add :UISupportedInterfaceOrientations array" "$PLIST"
+          $PB -c "Add :UISupportedInterfaceOrientations:0 string UIInterfaceOrientationPortrait" "$PLIST"
+          $PB -c "Delete :UISupportedInterfaceOrientations~ipad" "$PLIST" || true
+          $PB -c "Delete :UIViewControllerBasedStatusBarAppearance" "$PLIST" || true
+          $PB -c "Add :UIViewControllerBasedStatusBarAppearance bool false" "$PLIST"
+          $PB -c "Delete :UIStatusBarHidden" "$PLIST" || true
+          $PB -c "Add :UIStatusBarHidden bool true" "$PLIST"
+          $PB -c "Delete :ITSAppUsesNonExemptEncryption" "$PLIST" || true
+          $PB -c "Add :ITSAppUsesNonExemptEncryption bool false" "$PLIST"
+          # iPhone only, and a new build number every time
+          sed -i '' 's/TARGETED_DEVICE_FAMILY = "1,2";/TARGETED_DEVICE_FAMILY = 1;/g' "$PBX"
+          sed -i '' "s/CURRENT_PROJECT_VERSION = [0-9]*;/CURRENT_PROJECT_VERSION = $BUILD_NUMBER;/g" "$PBX"
+
+      - name: Set up code signing
+        script: xcode-project use-profiles
+
+      - name: Build the app
+        script: |
+          xcode-project build-ipa \
+            --project ios/App/App.xcodeproj \
+            --scheme App
+
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
