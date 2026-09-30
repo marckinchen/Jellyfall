@@ -8,6 +8,14 @@ workflows:
     max_build_duration: 45
     integrations:
       app_store_connect: Jellyfall
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: main
+          include: true
+          source: true
+      cancel_previous_builds: true
     environment:
       ios_signing:
         provisioning_profiles:
