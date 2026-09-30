@@ -1,5 +1,5 @@
 # Jellyfall – builds the iOS app and sends it to TestFlight.
-# The only line you may need to change is the bundle ID below.
+# Signing uses the certificate and profile saved in Codemagic by name.
 
 workflows:
   jellyfall-ios:
@@ -10,10 +10,12 @@ workflows:
       app_store_connect: Jellyfall
     environment:
       ios_signing:
-        distribution_type: app_store
-        bundle_identifier: &bundle com.mkgames.jellyfall
+        provisioning_profiles:
+          - jellyfall_profile
+        certificates:
+          - jellyfall_cert
       vars:
-        BUNDLE_ID: *bundle
+        BUNDLE_ID: com.mkgames.jellyfall
         APP_NAME: Jellyfall
       node: 22
       xcode: latest
